@@ -1,18 +1,23 @@
 #!/bin/bash
 
-PORT=8080
+LOGFILE="honeypot.log"
+PORTS=(21 22 23 25 80 110 135 139 443 445 3306 5432 6379 8080 8888 3389)
 
-echo "Listening for GET requests on port $PORT (with client IP)..."
+echo "Starting multi-port honeypot logger..."
+echo "Logging to $LOGFILE"
 
-while true; do
-  socat -v TCP-LISTEN:$PORT,reuseaddr,fork SYSTEM:'
-    while read line; do
-      if [[ "$line" =~ ^GET\ (.+)\ HTTP ]]; then
-        REQUEST="${BASH_REMATCH[1]}"
-        echo "$(date "+%Y-%m-%d %H:%M:%S") - $SOCAT_PEERADDR - GET $REQUEST"
-      fi
-      [[ -z "$line" ]] && break
+for PORT in "${PORTS[@]}"; do
+  (
+    while true; do
+      socat -v TCP-LISTEN:$PORT,reuseaddr,fork SYSTEM:'
+        read LINE
+        TS=$(date "+%Y-%m-%d %H:%M:%S")
+        echo "$TS - Port '"$PORT"' - IP $SOCAT_PEERADDR - Data: $LINE" >> '"$LOGFILE"'
+        echo -e "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
+      '
     done
-    echo -e "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
-  '
+  ) &
+  echo "Listening on port $PORT"
 done
+
+wait
